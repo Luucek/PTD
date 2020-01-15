@@ -14,33 +14,30 @@ import javafx.stage.Stage;
 
 public class Main extends Application {
 
+    // choose function to calculate
+    final String userModulation = "FSK";
+
+    // czas trwania bitu
+    final double Tb = 1.0;
+
+    // częstotliwość dla każdego bitu
+    final int N = 100;
+
+    // tworzenie Bitstream
+    final String s = "ptd";
+    final String bits = getBitstream(s);
+
+    // częśtotliwość całego wykresu
+    final int fn = N * bits.length();
+
+    // najbliższa potęga 2 wyliczana z częstotliwości, potrzebna do fft
+    final int closestPower = calculatePower(fn);
+
     public void start(Stage stage) {
 
-        // choose function to calculate
-        final String userModulation = "ASK";
-
-        // czas trwania bitu
-        final double Tb = 1.0;
-
-        // częstotliwość dla każdego bitu
-        final int N = 100;
-
-        // tworzenie Bitstream
-        final String s = "ptd";
-        final String bits = getBitstream(s);
-
-        // częśtotliwość całego wykresu
-        final int fn = N * bits.length();
-
-        // stałe
-        final double A1 = 1.0;
-        final double A2 = 2.0;
-
-        // najbliższa potęga 2 wyliczana z częstotliwości, potrzebna do fft
-        final int closestPower = calculatePower(fn);
 
         // wyliczanie całego wykresu
-        Complex[] m = calculateData(closestPower, userModulation, bits);
+        Complex[] m = calculateData(bits, userModulation, closestPower);
 
         // FFT
         Complex[] z = FFT.fft(m);
@@ -50,6 +47,15 @@ public class Main extends Application {
 
         // populating the series with data
         List<XYChart.Data<Integer, Float>> seriesData = new ArrayList<>();
+
+
+
+        // pętla decyduje czy na wykresie rysować funkcję czy widmo funkcji
+
+//        for (int i = 0; i < m.length; i++) {
+//            seriesData.add(new XYChart.Data(i, m[i].re()));
+//        }
+
         for (int i = 0; i < z2.size(); i++) {
             seriesData.add(new XYChart.Data(i, z2.elementAt(i)));
         }
@@ -59,7 +65,9 @@ public class Main extends Application {
         NumberAxis yAxis = new NumberAxis();
         XYChart.Series<Integer, Float> series = new XYChart.Series<>();
         series.getData().addAll(seriesData);
-        series.setName("Kluczowanie");
+
+        // chart name
+        series.setName("widmo " + userModulation);
 
         LineChart<Integer, Float> chart = new LineChart(xAxis, yAxis, FXCollections.observableArrayList(series));
 
@@ -97,14 +105,14 @@ public class Main extends Application {
         return bitstream.toString();
     }
 
-    private Complex[] calculateData(int n, String keying, String modulation) {
-        Complex[] data = new Complex[n];
-        for (int i = 0; i < n; i++) {
-            double result = getResult(keying, modulation.charAt(i));
-            data[i] = new Complex(result, 0);
+    private Complex[] calculateData(String bits, String keying, int Fn) {
+        Complex[] data = new Complex[Fn];
+        for (int i = 0; i < bits.length(); i++) {
+            for (int j = 0; j < Fn; j++) {
+                double result = getResult(keying, j, Character.getNumericValue(bits.charAt(i)));
+                data[j] = new Complex(result, 0);
+            }
         }
-        
-
         return data;
     }
 
@@ -118,18 +126,53 @@ public class Main extends Application {
         return m2;
     }
 
-    private Double getResult(String keying, int m) {
+    private Double getResult(String keying, int t, int m) {
         double z = 0.0;
-        if (keying == "ASK") {
-            z = Math.sin(m);
-        } else if (keying == "FSK") {
-        } else if (keying == "PSK") {
+        switch (keying) {
+            case "ASK":
+                z = ASK(t, m);
+                break;
+            case "FSK":
+                z = FSK(t, m);
+                break;
+            case "PSK":
+                z = PSK(t, m);
+                break;
         }
-
         return z;
     }
 
-    private  Double ASK(double t) {
+    private Double ASK(int t, int m) {
+        // stałe
+        final double A1 = 1.0;
+        final double A2 = 2.0;
+
+        if (m == 0)
+            return A1 * Math.sin(2 * Math.PI * closestPower * t);
+        else if (m == 1)
+            return A2 * Math.sin(2 * Math.PI * closestPower * t);
+
+        return 0.0;
+    }
+
+    private Double FSK(int t, int m) {
+        // stałe
+        final double Fn1 = (closestPower + 1) / Tb;
+        final double Fn2 = (closestPower + 2) / Tb;
+
+        if (m == 0)
+            return Math.sin(2 * Math.PI * Fn1 * t);
+        else if (m == 1)
+            return Math.sin(2 * Math.PI * Fn2 * t);
+
+        return 0.0;
+    }
+
+    private Double PSK(int t, int m) {
+        if (m == 0)
+            return Math.sin(2 * Math.PI * closestPower * t);
+        else if (m == 1)
+            return Math.sin((2 * Math.PI * closestPower * t) + Math.PI);
 
         return 0.0;
     }
